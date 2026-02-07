@@ -110,7 +110,8 @@ def verify():
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.json
-    if data.get('object') == 'instagram':
+    # ARTIK HEM INSTAGRAM HEM PAGE (FACEBOOK) KABUL EDİYORUZ
+    if data.get('object') == 'instagram' or data.get('object') == 'page':
         for entry in data.get('entry', []):
             for messaging in entry.get('messaging', []):
                 if 'message' in messaging and 'text' in messaging['message']:
