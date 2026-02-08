@@ -147,6 +147,10 @@ def verify():
             return "Doğrulama Başarısız", 403
     return "Merhaba, burası DolunAI Webhook Kapısı", 200
 
+# UptimeRobot'un "Ben buradayım" diyebileceği basit bir kapı
+@app.route('/')
+def home():
+    return "Ferda Bot Calisiyor! 🚀", 200
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
