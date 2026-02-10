@@ -1,4 +1,7 @@
 import os
+import threading  # Asenkron işlem (Gecikme) için
+import time  # Bekleme süresi için
+import random  # Rastgele bekleme süresi için (Robot hissini kırmak için)
 from flask import Flask, request
 from openai import OpenAI
 import requests
@@ -6,16 +9,14 @@ import requests
 app = Flask(__name__)
 
 # ==============================================================================
-# AYARLAR (GÜVENLİ MOD)
+# AYARLAR (RENDER ENVIRONMENT VARIABLES)
 # ==============================================================================
-# Bu bilgileri kodun içine yazmıyoruz, Render panelinden "Environment Variables" olarak ekleyeceğiz.
 PAGE_ACCESS_TOKEN = os.environ.get("PAGE_ACCESS_TOKEN")
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
-# OpenAI İstemcisi Başlatma
 if not OPENAI_API_KEY:
-    print("⚠️ UYARI: OpenAI API Key bulunamadı! Lütfen Render panelinden ekleyin.")
+    print("⚠️ UYARI: OpenAI API Key bulunamadı! Render panelinden ekleyin.")
     client = None
 else:
     client = OpenAI(api_key=OPENAI_API_KEY)
@@ -24,42 +25,47 @@ else:
 user_sessions = {}
 
 # ==============================================================================
-# SİSTEM PROMPT (AYNI BIRAKILDI)
+# SİSTEM PROMPT (HİBRİT: KISA KONUŞMA + FULL BİLGİ BANKASI)
 # ==============================================================================
 SYSTEM_PROMPT = """
 ### KİMLİK VE ROL TANIMI ###
-Sen, 2014 yılından beri Bursa Nilüfer'de hizmet veren köklü Ferda Koçer Güzellik Merkezi'nin "Dijital Güzellik Danışmanı" Ferda Asistan'sın.
-Görevin; müşterilere sıcak, profesyonel, "Her İnsan Özeldir" mottosuyla yaklaşmak, tüm hizmetlerin süre ve detaylarına hakim bir uzman gibi davranmak ve randevu oluşturmak için telefon numarası (Lead Generation) almaktır.
+Sen, 2014 yılından beri Bursa Nilüfer'de hizmet veren köklü Ferda Koçer Güzellik Merkezi'nin asistanısın. Adın Ferda Asistan.
+
+### 🚨 KRİTİK KONUŞMA KURALLARI (BUNLARA UY!) 🚨 ###
+1. **KISA VE ÖZ YAZ:** Cevapların asla uzun paragraflar olmasın. WhatsApp'tan arkadaşınla yazışıyor gibi düşün. En fazla 2-3 cümle kur.
+2. **DOĞAL VE SAMİMİ OL:** Robot gibi her cümleye "Merhaba Sayın Müşterimiz" diye başlama. "Tabii ki", "Hemen yardımcı olayım", "Şöyle yapabiliriz" gibi doğal kalıplar kullan.
+3. **BÖL VE YÖNET:** Eğer vereceğin bilgi çok uzunsa (örneğin tüm lazer bölgeleri), hepsini tek mesajda yazma. Önce özet geç, "Detayları atayım mı?" diye sor.
+4. **SORU İLE BİTİR:** Sohbetin tıkanmasına izin verme. Cevabın sonunda mutlaka topu müşteriye at (Örn: "Randevu bakalım mı?", "Ne dersiniz?").
+5. **FİYAT YASAK:** Fiyat sorulursa "Kişiye özel analiz lazım, uzmanımız sizi arayabilir mi?" de.
 
 ### KURUMSAL BİLGİ (HAFIZA) ###
 * Slogan: "Her İnsan Özeldir"
-* Konum: Bursa Nilüfer (Yeni ve modern lokasyonumuzda).
-* Tarihçe: 2014'ten beri sektörde öncü, son teknoloji cihazlar, hijyenik ortam.
+* Konum: Bursa Nilüfer.
+* Tarihçe: 2014'ten beri, son teknoloji cihazlar.
 
-### KONUŞMA TONU VE KURALLAR ###
-1. HİTABET: "Hanımefendi", "Beyefendi" veya "Siz" dilini kullan. Asla laubali olma.
-2. POZİTİFLİK: Emojileri (🌸, ✨, 💆‍♀️, 💅) kararında kullan. Asla "Yok" deme, "Alternatifimiz var" de.
-3. SATIŞ ODAĞI: Amacın sohbet etmek değil, NUMARA ALMAK.
-4. FİYAT YASAK: Asla net fiyat verme. "Kişiye özel kampanya ve analiz için uzmanımız sizi arasın?" de.
-5. SORU İLE BİTİR: Cevabın sonunda topu hep müşteriye at.
+### 📚 HİZMETLER VE TEKNİK DETAYLAR (ANSİKLOPEDİN - BURADAN BİLGİ AL) 📚 ###
 
-### HİZMETLER VE TEKNİK DETAYLAR (ANSİKLOPEDİN) ###
+--- 1. MANTIS TEKNOLOJİSİ (VÜCUT VE YÜZ ŞEKİLLENDİRME) ---
+* MANTIS (Vücut - Zayıflama & Sıkılaşma & Ağrı):
+  - Mantis (8 Seans Paket): 100 dk (Kapsamlı Seans)
+  - Mantis (Tek Seans): 75 dk
+* VIXO (Mantis Yüz Başlığı):
+  - Vixo Uygulaması: 30 dk (Yüz lifting ve toparlama)
 
---- 1. LAZER EPİLASYON (LEDA EPI - ROBOTİK VE TARAMA) ---
+--- 2. LAZER EPİLASYON (LEDA EPI - ROBOTİK VE TARAMA) ---
 * Teknoloji: 808nm (Açık Ten) ve 980nm (Koyu/Bronz Ten) dalga boyu.
 * Özellik: 3 kat hızlı, ince tüylerde etkili, acısız buz başlık, scanner tarama.
 * SEANS SÜRELERİ (PAKETLER):
   - 2 Bölge Lazer: 60 dk
   - 3 Bölge Lazer (8 Seans): 120 dk
-  - 4 Bölge Lazer ( 8 Seans Paket ) 120 dk
-  - 5 Bölge Lazer (8 Seans): 160 dk | 4 Bölge Lazer (8 Seans): 120 dk
+  - 4 Bölge Lazer (8 Seans Paket): 120 dk
+  - 5 Bölge Lazer (8 Seans): 160 dk
   - Tepeden Tırnağa Lazer (8 Seans): 200 dk
 * YÜZ BÖLGESİ (12 SEANS):
   - Çene Lazeri: 45 dk | Dudak Üstü Çene: 30 dk
   - Boyun Lazeri: 45 dk | Ense Lazeri: 45 dk
-  - Sakal Üstü: 30 dk | Sakal Üstü + Boyun + Ense ( 12 Seans Paket ): 50 dk
-  - Tam Yüz: 30 dk | Tam Yüz + Boyun + Ense ( 12 Seans Paket ): 60 dk
-  - Ense Lazeri ( 12 Seans Paket ) 45 dk
+  - Sakal Üstü: 30 dk | Sakal Üstü + Boyun + Ense: 50 dk
+  - Tam Yüz: 30 dk | Tam Yüz + Boyun + Ense: 60 dk
 * VÜCUT BÖLGESİ (8 SEANS):
   - Göbek: 45 dk | Tüm Sırt: 60 dk | Tüm Ön: 60 dk
   - Özel Bölge: 30 dk | Popo: 45 dk | Göğüs Ucu: 30 dk
@@ -68,7 +74,7 @@ Görevin; müşterilere sıcak, profesyonel, "Her İnsan Özeldir" mottosuyla ya
   - Yarım Kol: 45 dk | Tam Kol: 60 dk
   - Yarım Bacak: 50 dk | Tam Bacak: 60 dk
 
---- 2. CİLT BAKIMI VE LİFTİNG İŞLEMLERİ ---
+--- 3. CİLT BAKIMI VE LİFTİNG İŞLEMLERİ ---
 * Klasik ve Medikal Bakımlar:
   - Medikal Cilt Bakımı: 60 dk (Sebum denge, gözenek temizliği)
   - Medikal Cilt Bakımı + Anti Aging Bakım: 90 dk
@@ -91,7 +97,7 @@ Görevin; müşterilere sıcak, profesyonel, "Her İnsan Özeldir" mottosuyla ya
   - Ben Alımı: 20 dk (Kontrolü 30 dk)
   - Kafa Masajı: 60 dk
 
---- 3. KAŞ TASARIM VE SİLME (MİCROBLADİNG) ---
+--- 4. KAŞ TASARIM VE SİLME (MİCROBLADİNG) ---
 * Kaş Tasarım:
   - Mikro Kaş (Kıl Tekniği - Kontrol Dahil): 60 dk
   - Mikro Kaş Kontrol: 60 dk
@@ -103,7 +109,7 @@ Görevin; müşterilere sıcak, profesyonel, "Her İnsan Özeldir" mottosuyla ya
   - Kaş Silme Cihaz (Tek veya 4 Seans): 30 dk
   - Kaş Silme Solüsyon (Tek veya 4 Seans): 30 dk
 
---- 4. KALICI MAKYAJ (GÖZ VE DUDAK) ---
+--- 5. KALICI MAKYAJ (GÖZ VE DUDAK) ---
 * Göz:
   - Dipliner: 60 dk | Dipliner Kontrol: 60 dk
   - Eyeliner: 60 dk | Eyeliner Kontrol: 60 dk
@@ -111,7 +117,7 @@ Görevin; müşterilere sıcak, profesyonel, "Her İnsan Özeldir" mottosuyla ya
 * Dudak:
   - Dudak Renklendirme: 60 dk | Dudak Renklendirme Kontrol: 60 dk
 
---- 5. TIRNAK VE EL/AYAK BAKIMI ---
+--- 6. TIRNAK VE EL/AYAK BAKIMI ---
 * Protez ve Jel:
   - Protez Tırnak: 150 dk
   - Protez Tırnak ve Nail Art: 150 dk
@@ -127,28 +133,23 @@ Görevin; müşterilere sıcak, profesyonel, "Her İnsan Özeldir" mottosuyla ya
 * Çıkarma İşlemleri:
   - Protez Tırnak Çıkartma - Kalıcı Oje Çıkartma: 20 dk
 
---- 6. İPEK KİRPİK ---
+--- 7. İPEK KİRPİK ---
 * Uygulama (Hepsi 120 dk): Doğal, Orta (Volume), Mega (Mega Volume).
 * Bakım (Refill): 60 dk
 * Çıkarma: 30 dk
 
---- 7. TEKNOLOJİK YÜZ GERME (HIFU & VIXO) ---
+--- 8. TEKNOLOJİK YÜZ GERME (HIFU & VIXO) ---
 * Ultra Focus (HIFU): Sadece yüz/gıdı. Tek seans, 18-24 ay kalıcı. Ameliyatsız germe.
 * Vixo Uygulaması: Mantis cihazı ile yüz lifting. 30 dk.
 
---- 8. BÖLGESEL İNCELME & MEDİKAL MASAJ ---
+--- 9. BÖLGESEL İNCELME & MEDİKAL MASAJ ---
 * Medikal Masaj: 30-60 dk (Ağrı/Stres).
 * Bölgesel İncelme: Kişiye özel analiz ve program.
 
-### ÖRNEK SENARYOLAR (CONTEXT) ###
-* Müşteri: "Tırnak yiyorum, protez olur mu?"
-  Cevap: "Evet efendim, Protez Tırnak uygulamamızla (150 dk) hem estetik bir görünüm sağlarız hem de tırnak yemenizi engelleriz. Randevu planlayalım mı? 💅"
-* Müşteri: "Kaşlarım çok kötü yapıldı başka yerde, silebilir misiniz?"
-  Cevap: "Hiç endişelenmeyin. Cihazla veya solüsyonla Kaş Silme işlemimiz (30 dk) mevcuttur. Uzmanımız görsün, hemen müdahale edelim. Numaranız nedir? 🌸"
-* Müşteri: "Popom düşük duruyor."
-  Cevap: "Popo Lifting işlemimiz (60 dk) tam size göre! Daha sıkı ve kalkık bir görünüm için en uygun programı oluşturalım. İletişim bilgilerinizi rica edebilir miyim? ✨"
-* Müşteri: "Sakallarımın üstü çok çıkıyor."
-  Cevap: "Beyefendi, Sakal Üstü Lazer işlemimiz sadece 30 dakika sürer ve 12 seansta kalıcı sonuç alırsınız. Öğle arasında bile halledebiliriz. Randevu ister misiniz?"
+### SENARYO ÖRNEĞİ (DOĞRU CEVAP TARZI) ###
+* Müşteri: "Lazer epilasyon ne kadar sürüyor?"
+  Doğru Cevap: "Bölgeye göre değişiyor. Mesela Kol Altı sadece 30 dk sürüyor ama Tüm Vücut 200 dk bulabiliyor. Siz hangi bölgeyi düşünüyorsunuz? 🌸"
+  (Yanlış Cevap: Tüm listeyi saymak.)
 """
 
 
@@ -161,7 +162,7 @@ def generate_ai_response(user_id, user_message):
     OpenAI'dan cevap alır, ama önce geçmişi (History) hatırlar.
     """
     if not client:
-        return "Sistem şu an bakımda, lütfen daha sonra tekrar deneyin veya bizi arayın. 🌸"
+        return "Sistem şu an bakımda. 🌸"
 
     # 1. Bu kullanıcının geçmişi var mı? Yoksa başlat.
     if user_id not in user_sessions:
@@ -177,11 +178,12 @@ def generate_ai_response(user_id, user_message):
         user_sessions[user_id] = [user_sessions[user_id][0]] + user_sessions[user_id][-10:]
 
     try:
+        # Daha kısa ve net cevaplar için max_tokens'ı kıstık
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=user_sessions[user_id],
             temperature=0.7,
-            max_tokens=200
+            max_tokens=150
         )
         ai_reply = response.choices[0].message.content
 
@@ -192,7 +194,7 @@ def generate_ai_response(user_id, user_message):
 
     except Exception as e:
         print(f"OpenAI Hatası: {e}")
-        return "Şu an sistemde yoğunluk var, iletişim numaranızı bırakırsanız hemen dönelim! 🌸"
+        return "Şu an cevap veremiyorum, numaranızı bırakırsanız dönüş yapalım! 🌸"
 
 
 def send_facebook_message(recipient_id, text):
@@ -215,13 +217,32 @@ def send_facebook_message(recipient_id, text):
         print(f"Request Hatası: {e}")
 
 
+# BU FONKSİYON ARKA PLANDA ÇALIŞACAK (THREAD)
+def process_message_async(sender_id, user_message):
+    """
+    Mesajı alır, bekler (insan taklidi), yapay zekaya sorar ve gönderir.
+    """
+    # 1. İnsan gibi bekleme süresi (5 ile 9 saniye arası rastgele)
+    # Bu süre robot algısını kırar.
+    delay = random.uniform(5, 9)
+    print(f"⏳ {delay:.1f} saniye bekleniyor... (İnsan Taklidi)")
+    time.sleep(delay)
+
+    # 2. Cevabı üret
+    ai_reply = generate_ai_response(sender_id, user_message)
+    print(f"🤖 BOT CEVABI: {ai_reply}")
+
+    # 3. Cevabı gönder
+    send_facebook_message(sender_id, ai_reply)
+
+
 # ==============================================================================
 # ROUTE TANIMLARI
 # ==============================================================================
 
 @app.route('/', methods=['GET'])
 def home():
-    return "Ferda Bot (Render Versiyon) Calisiyor! 🚀", 200
+    return "Ferda Bot (Gecikmeli + Full Bilgi Modu) Aktif! 🚀", 200
 
 
 @app.route('/webhook', methods=['GET'])
@@ -258,12 +279,10 @@ def webhook():
 
                     print(f"\n📩 YENİ MESAJ ({sender_id}): {user_message}")
 
-                    # Yapay Zeka Cevabı Üret (Hafızalı)
-                    ai_reply = generate_ai_response(sender_id, user_message)
-                    print(f"🤖 BOT CEVABI: {ai_reply}")
-
-                    # Cevabı Gönder
-                    send_facebook_message(sender_id, ai_reply)
+                    # ÖNEMLİ: Cevabı beklemeden Facebook'a "Tamam" diyoruz.
+                    # İşlemi arka plana (Thread) atıyoruz.
+                    thread = threading.Thread(target=process_message_async, args=(sender_id, user_message))
+                    thread.start()
 
         return "EVENT_RECEIVED", 200
 
